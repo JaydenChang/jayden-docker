@@ -36,6 +36,7 @@ var runCommand = cli.Command{
 		}
 		tty := context.Bool("ti")
 
+		volume := context.String("v")
 		res := &subsystem.ResourceConfig{
 			MemoryLimit: context.String("m"),
 			CpuSet:      context.String("cpuset"),
@@ -45,7 +46,7 @@ var runCommand = cli.Command{
 		for _, arg := range context.Args() {
 			cmdArray = append(cmdArray, arg)
 		}
-		Run(cmdArray, tty, res)
+		Run(cmdArray, tty, res, volume)
 		return nil
 	},
 }
@@ -56,5 +57,24 @@ var initCommand = cli.Command{
 	Action: func(context *cli.Context) error {
 		logrus.Infof("init come on")
 		return container.RunContainerInitProcess()
+	},
+}
+
+var commitCommand = cli.Command{
+	Name:  "commit",
+	Usage: "docker container process run user's process in container. Do not call it outside",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "c",
+			Usage: "export image path",
+		},
+	},
+	Action: func(context *cli.Context) error {
+		if len(context.Args()) < 1 {
+			return fmt.Errorf("missing container args")
+		}
+		imageName := context.Args().Get(0)
+		imagePath := context.String("c")
+		return container.CommitContainer(imageName, imagePath)
 	},
 }

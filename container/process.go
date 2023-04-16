@@ -3,10 +3,13 @@ package container
 import (
 	"os"
 	"os/exec"
+	"simple-docker/common"
 	"syscall"
+
+	"github.com/sirupsen/logrus"
 )
 
-func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool,volume string) (*exec.Cmd, *os.File) {
 	readPipe, writePipe, _ := os.Pipe()
 	cmd := exec.Command("/proc/self/exe", "init")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -19,5 +22,10 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 		cmd.Stderr = os.Stderr
 	}
 	cmd.ExtraFiles = []*os.File{readPipe}
-	return cmd,writePipe
+	err := NewWorkSpace(common.RootPath, common.MntPath, volume)
+	if err != nil {
+		logrus.Errorf("new work space, err: %v", err)
+	}
+	cmd.Dir = common.MntPath
+	return cmd, writePipe
 }
