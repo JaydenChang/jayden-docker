@@ -5,101 +5,76 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
 )
 
-func RunContainerInitProcess() error {
-	cmdArray := readUserCommand()
-	if cmdArray == nil || len(cmdArray) == 0 {
-		return fmt.Errorf("get user command in run container")
-	}
-	err := setUpMount()
-	if err != nil {
-		logrus.Errorf("set up mount, err: %v", err)
-		return err
+// container/init.go
+func NewProcess(tty bool, containerCmd string) *exec.Cmd {
+
+	// create a new command which run itself
+	// the first arguments is `init` which is the below exported function
+	// so, the <cmd> will be interpret as "docker init <containerCmd>"
+	args := []string{"init", containerCmd}
+	cmd := exec.Command("/proc/self/exe", args...)
+
+	// new namespaces, thanks to Linux
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWIPC | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET,
 	}
 
-	path, err := exec.LookPath(cmdArray[0])
-	if err != nil {
-		logrus.Errorf("look %s path, err: %v", cmdArray[0], err)
-		return err
+	// this is what presudo terminal means
+	// link the container's stdio to os
+	if tty {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 	}
 
-	err = syscall.Exec(path, cmdArray[0:], os.Environ())
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd
 }
 
-func readUserCommand() []string {
-	pipe := os.NewFile(uintptr(3), "pipe")
-	bs, err := ioutil.ReadAll(pipe)
-	if err != nil {
-		logrus.Errorf("read pipe, err: %v", err)
-		return nil
-	}
-	msg := string(bs)
-	return strings.Split(msg, " ")
-}
+// already in container
+// initiate the container
+func InitProcess() error {
 
-func setUpMount() error {
-	err := pivotRoot()
-	if err != nil {
-		logrus.Errorf("pivot root, err: %v", err)
-		return err
-	}
-	err = syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, "")
-	if err != nil {
-		return err
+	// read command from pipe, will plug if write side is not ready
+	containerCmd := readCommand()
+	if len(containerCmd) == 0 {
+		return fmt.Errorf("Init process fails, containerCmd is nil")
 	}
 	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	err = syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
+
+	// mount proc filesystem
+	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
+
+	// look for the path of container command
+	// so we don't need to type "/bin/ls", but "ls"
+	path, err := exec.LookPath(containerCmd[0])
 	if err != nil {
-		logrus.Errorf("mount proc, err: %v", err)
+		logrus.Errorf("initProcess look path fails: %v", err)
 		return err
 	}
-	err = syscall.Mount("tmpfs", "/dev", "tmpfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=0755")
-	if err != nil {
-		logrus.Errorf("mount tmpfs, err: %v", err)
-		return err
+
+	// log path info
+	// if you type "ls", it will be "/bin/ls"
+	logrus.Infof("Find path: %v", path)
+	if err := syscall.Exec(path, containerCmd, os.Environ()); err != nil {
+		logrus.Errorf(err.Error())
 	}
+
 	return nil
 }
 
-func pivotRoot() error {
-	root, err := os.Getwd()
+func readCommand() []string {
+	// 3 is the index of readPipe
+	pipe := os.NewFile(uintptr(3), "pipe")
+	msg, err := ioutil.ReadAll(pipe)
 	if err != nil {
-		return err
+		logrus.Errorf("read pipe fails: %v", err)
+		return nil
 	}
-	logrus.Infof("current location is %s", root)
-	err = syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, "")
-	if err != nil {
-		return err
-	}
-	if err := syscall.Mount(root, root, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("mount roofs to itself error: %v", err)
-	}
-	pivotDir := filepath.Join(root, ".pivot_root")
-	_, err = os.Stat(pivotDir)
-	if err != nil && os.IsNotExist(err) {
-		if err := os.Mkdir(pivotDir, 0777); err != nil {
-			return err
-		}
-	}
-	if err := syscall.PivotRoot(root, pivotDir); err != nil {
-		return fmt.Errorf("pivot root error: %v", err)
-	}
-	if err := syscall.Chdir("/"); err != nil {
-		return fmt.Errorf("chdir / %v", err)
-	}
-	pivotDir = filepath.Join("/", ".pivot_root")
-	if err := syscall.Unmount(pivotDir, syscall.MNT_DETACH); err != nil {
-		return fmt.Errorf("unmount pivot root error: %v", err)
-	}
-	return os.Remove(pivotDir)
+	return strings.Split(string(msg), " ")
 }

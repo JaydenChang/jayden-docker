@@ -7,13 +7,12 @@ import (
 	"github.com/urfave/cli"
 )
 
-const usage = `go-docker`
+const usage = `Usage`
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "go-docker"
+	app.Name = "simple-docker"
 	app.Usage = usage
-
 	app.Commands = []cli.Command{
 		runCommand,
 		initCommand,

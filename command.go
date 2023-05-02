@@ -1,170 +1,68 @@
 package main
 
 import (
-	"fmt"
-	"simple-docker/cgroups/subsystem"
+	"errors"
+	"simple-docker/cgroup/subsystem"
 	"simple-docker/container"
+	"simple-docker/dockerCommand"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
-var runCommand = cli.Command{
-	Name:  "run",
-	Usage: "Create a container with namespace and cgroups limit",
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "ti",
-			Usage: "enable tty",
-		},
-		cli.StringFlag{
-			Name:  "m",
-			Usage: "memory limit",
-		},
-		cli.StringFlag{
-			Name:  "cpushare",
-			Usage: "cpushare limit",
-		},
-		cli.StringFlag{
-			Name:  "cpuset",
-			Usage: "cpuset limit",
-		},
-		cli.StringFlag{
-			Name:  "v",
-			Usage: "docker volume",
-		},
-		cli.BoolFlag{
-			Name:  "d",
-			Usage: "detach container",
-		},
-		cli.StringFlag{
-			Name:  "name",
-			Usage: "container name",
-		},
-		cli.StringSliceFlag{
-			Name:  "e",
-			Usage: "docker env",
-		},
-		cli.StringFlag{
-			Name:  "net",
-			Usage: "container network",
-		},
-		cli.StringSliceFlag{
-			Name:  "p",
-			Usage: "port mapping",
-		},
-	},
-	Action: func(context *cli.Context) error {
-		if len(context.Args()) < 1 {
-			return fmt.Errorf("missing container args")
-		}
-		tty := context.Bool("ti")
-		detach := context.Bool("d")
-		volume := context.String("v")
-		res := &subsystem.ResourceConfig{
-			MemoryLimit: context.String("m"),
-			CpuSet:      context.String("cpuset"),
-			CpuShare:    context.String("cpushare"),
-		}
-		var cmdArray []string
-		for _, arg := range context.Args() {
-			cmdArray = append(cmdArray, arg)
-		}
-		if tty && detach {
-			return fmt.Errorf("ti and d paramter can not both privided")
-		}
-		containerName := context.String("name")
-		nets := context.String("net")
-		imageName := context.Args().Get(0)
-		envs := context.StringSlice("e")
-		ports := context.StringSlice("p")
-
-		Run(cmdArray, tty, res, containerName, imageName, volume, nets, envs, ports)
-		return nil
-	},
-}
-
+// command.go
+// docker init, but cannot be used by user
 var initCommand = cli.Command{
 	Name:  "init",
-	Usage: "Init container process run user's process in container. Do not call it outside",
+	Usage: "init a container",
 	Action: func(context *cli.Context) error {
-		logrus.Infof("init come on")
-		return container.RunContainerInitProcess()
+		logrus.Infof("Start initiating...")
+		return container.InitProcess()
 	},
 }
 
-var commitCommand = cli.Command{
-	Name:  "commit",
-	Usage: "docker container process run user's process in container. Do not call it outside",
+// docker run
+var runCommand = cli.Command{
+	Name:  "run",
+	Usage: "Create a container",
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  "c",
-			Usage: "export image path",
+		// integrate -i and -t for convenience
+		&cli.BoolFlag{
+			Name:  "it",
+			Usage: "open an interactive tty(pseudo terminal)",
+		},
+		&cli.StringFlag{
+			Name:  "m",
+			Usage: "limit the memory",
+		}, &cli.StringFlag{
+			Name:  "cpu",
+			Usage: "limit the cpu amount",
+		}, &cli.StringFlag{
+			Name:  "cpushare",
+			Usage: "limit the cpu share",
 		},
 	},
 	Action: func(context *cli.Context) error {
-		if len(context.Args()) < 1 {
-			return fmt.Errorf("missing container args")
+		args := context.Args()
+		if len(args) == 0 {
+			return errors.New("Run what?")
 		}
-		imageName := context.Args().Get(0)
-		imagePath := context.String("c")
-		return container.CommitContainer(imageName, imagePath)
-	},
-}
 
-var networkCommand = cli.Command{
-	Name:  "network",
-	Usage: "container network commands",
-	Subcommands: []cli.Command{
-		{
-			Name:  "create",
-			Usage: "create container network",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "driver",
-					Usage: "network driver",
-				},
-				cli.StringFlag{
-					Name:  "subnet",
-					Usage: "network cidr",
-				},
-			},
-			Action: func(context *cli.Context) error {
-				if len(context.Args()) < 1 {
-					return fmt.Errorf("missing network name")
-				}
-				err := network.Init()
-				if err != nil {
-					logrus.Errorf("network init failed, err: %v", err)
-					return err
-				}
-				err = network.CreateNework(context.String("driver"), context.String("subnet", context.Args()[0]))
-				if err == nil {
-					return fmt.Errorf("create network err: %+v", err)
-				}
-				return nil
-			},
-		},
-		{
-			Name:  "list",
-			Usage: "list container network",
-			Action: func(context *cli.Context) error {
-				err := network.Init()
-				if err != nil {
-					logrus.Errorf("network init failed, err: %v", err)
-					return err
-				}
-				err = network.Init()
-				if err != nil {
-					logrus.Errorf("network init failed, err: %v", err)
-					return err
-				}
-				err = network.DeleteNetwork(context.Args()[0])
-				if err != nil {
-					return fmt.Errorf("delete network err: %+v", err)
-				}
-				return nil
-			},
-		},
+		// 转化 cli.Args 为 []string
+		containerCmd := make([]string, len(args)) // command
+		copy(containerCmd, args)
+
+		// check whether type `-it`
+		tty := context.Bool("it") // presudo terminal
+
+		// get the resource config
+		resourceConfig := subsystem.ResourceConfig{
+			MemoryLimit: context.String("m"),
+			CPUShare:    context.String("cpushare"),
+			CPUSet:      context.String("cpu"),
+		}
+		dockerCommand.Run(tty, containerCmd, &resourceConfig)
+
+		return nil
 	},
 }
