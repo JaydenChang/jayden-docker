@@ -15,7 +15,11 @@ import (
 func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig) {
 
 	// this is "docker init <containerCmd>"
-	initProcess, writePipe := container.NewContainerProcess(tty)
+	initProcess, writePipe := container.NewParentProcess(tty)
+	if initProcess == nil {
+		logrus.Errorf("new parent process error")
+		return
+	}
 
 	// start the init process
 	if err := initProcess.Start(); err != nil {
@@ -33,7 +37,10 @@ func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig) {
 	sendInitCommand(containerCmd, writePipe)
 
 	initProcess.Wait()
-	os.Exit(-1)
+	rootURL := "/root/"
+	mntURL := "/root/mnt/"
+	container.DeleteWorkSpace(rootURL, mntURL)	
+	os.Exit(0)
 }
 
 func sendInitCommand(containerCmd []string, writePipe *os.File) {
