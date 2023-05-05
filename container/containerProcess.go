@@ -1,7 +1,6 @@
 package container
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -11,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 
 	readPipe, writePipe, err := os.Pipe()
 
@@ -40,7 +39,7 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 	cmd.ExtraFiles = []*os.File{readPipe}
 	rootURL := "/root/"
 	mntURL := "/root/mnt/"
-	NewWorkSpace(rootURL, mntURL)
+	NewWorkSpace(rootURL, mntURL, volume)
 	cmd.Dir = mntURL
 	return cmd, writePipe
 }
@@ -69,21 +68,31 @@ func DeleteMountPoint(rootURL string, mntURL string) {
 }
 
 func DeleteWriteLayer(rootURL string) {
-	writeURL := rootURL + "writeLayer/"
+	writeURL := rootURL + "/writeLayer/"
 	if err := os.RemoveAll(writeURL); err != nil {
 		logrus.Errorf("remove dir %s error %v", writeURL, err)
 	}
 }
 
-func DeleteWorkSpace(rootURL, mntURL string) {
-	DeleteMountPoint(rootURL, mntURL)
+func DeleteWorkSpace(rootURL, mntURL, volume string) {
+	if volume != "" {
+		volumeURLs := volumeUrlExtract(volume)
+		length := len(volumeURLs)
+		if length == 2 && volumeURLs[0] != "" && volumeURLs[1] != "" {
+			DeleteMountPointWithVolume(rootURL, mntURL, volumeURLs)
+		} else {
+			DeleteMountPoint(rootURL, mntURL)
+		}
+	} else {
+		DeleteMountPoint(rootURL, mntURL)
+	}
 	DeleteWriteLayer(rootURL)
 }
 
-// extra tar to 'busybox', used as the read only layer for container
+// extract tar to 'busybox', used as the read only layer for container
 func CreateReadOnlyLayer(rootURL string) {
-	busyboxURL := rootURL + "busybox/"
-	busyboxTarURL := rootURL + "busybox.tar"
+	busyboxURL := rootURL + "/busybox/"
+	busyboxTarURL := rootURL + "/busybox.tar"
 	exist, err := PathExists(busyboxURL)
 
 	if err != nil {
@@ -101,7 +110,7 @@ func CreateReadOnlyLayer(rootURL string) {
 
 // create a unique folder as writeLayer
 func CreateWriteLayer(rootURL string) {
-	writeURL := rootURL + "writeLayer/"
+	writeURL := rootURL + "/writeLayer/"
 	if err := os.Mkdir(writeURL, 0777); err != nil {
 		logrus.Errorf("mkdir dir %s error %v", writeURL, err)
 	}
@@ -113,8 +122,7 @@ func CreateMountPoint(rootURL string, mntURL string) {
 		logrus.Errorf("mkdir dir %s error %v", mntURL, err)
 	}
 	// mount 'writeLayer' and 'busybox' to 'mnt'
-	dirs := "dirs=" + rootURL + "writeLayer:" + rootURL + "busybox"
-	fmt.Println(dirs)
+	dirs := "dirs=" + rootURL + "/writeLayer:" + rootURL + "/busybox"
 	cmd := exec.Command("mount", "-t", "aufs", "-o", dirs, "none", mntURL)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -134,8 +142,18 @@ func PathExists(path string) (bool, error) {
 	return false, err
 }
 
-func NewWorkSpace(rootURL, mntURL string) {
+func NewWorkSpace(rootURL, mntURL, volume string) {
 	CreateReadOnlyLayer(rootURL)
 	CreateWriteLayer(rootURL)
 	CreateMountPoint(rootURL, mntURL)
+	if volume != "" {
+		volumeURLs := volumeUrlExtract(volume)
+		length := len(volumeURLs)
+		if length == 2 && volumeURLs[0] != "" && volumeURLs[1] != "" {
+			MountVolume(rootURL, mntURL, volumeURLs)
+			logrus.Infof("%q", volumeURLs)
+		} else {
+			logrus.Infof("volume parameter input is not correct")
+		}
+	}
 }

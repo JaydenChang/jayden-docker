@@ -40,12 +40,15 @@ var runCommand = cli.Command{
 		}, &cli.StringFlag{
 			Name:  "cpushare",
 			Usage: "limit the cpu share",
+		}, &cli.StringFlag{
+			Name:  "v",
+			Usage: "volume",
 		},
 	},
 	Action: func(context *cli.Context) error {
 		args := context.Args()
-		if len(args) == 0 {
-			return errors.New("Run what?")
+		if len(args) <= 0 {
+			return errors.New("run what?")
 		}
 
 		// 转化 cli.Args 为 []string
@@ -61,7 +64,8 @@ var runCommand = cli.Command{
 			CPUShare:    context.String("cpushare"),
 			CPUSet:      context.String("cpu"),
 		}
-		dockerCommand.Run(tty, containerCmd, &resourceConfig)
+		volume := context.String("v")
+		dockerCommand.Run(tty, containerCmd, &resourceConfig,volume)
 
 		return nil
 	},

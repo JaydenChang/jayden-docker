@@ -12,10 +12,10 @@ import (
 
 // dockerCommand/run.go
 // This is the function what `docker run` will call
-func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig) {
+func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig, volume string) {
 
 	// this is "docker init <containerCmd>"
-	initProcess, writePipe := container.NewParentProcess(tty)
+	initProcess, writePipe := container.NewParentProcess(tty, volume)
 	if initProcess == nil {
 		logrus.Errorf("new parent process error")
 		return
@@ -39,7 +39,7 @@ func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig) {
 	initProcess.Wait()
 	rootURL := "/root/"
 	mntURL := "/root/mnt/"
-	container.DeleteWorkSpace(rootURL, mntURL)	
+	container.DeleteWorkSpace(rootURL, mntURL, volume)
 	os.Exit(0)
 }
 
