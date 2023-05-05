@@ -45,13 +45,13 @@ var runCommand = cli.Command{
 			Name:  "v",
 			Usage: "volume",
 		}, &cli.BoolFlag{
-			Name: "d",
-			Usage :"detach container",
+			Name:  "d",
+			Usage: "detach container",
 		}, &cli.StringFlag{
-			Name: "cpuset",
+			Name:  "cpuset",
 			Usage: "limit the cpuset",
-		}, &cli.StringFlag {
-			Name: "name",
+		}, &cli.StringFlag{
+			Name:  "name",
 			Usage: "container name",
 		},
 	},
@@ -66,7 +66,7 @@ var runCommand = cli.Command{
 		copy(containerCmd, args)
 
 		// check whether type `-it`
-		tty := context.Bool("it") // presudo terminal
+		tty := context.Bool("it")   // presudo terminal
 		detach := context.Bool("d") // detach container
 
 		if tty && detach {
@@ -102,10 +102,23 @@ var commitCommand = cli.Command{
 }
 
 var listCommand = cli.Command{
-	Name: "ps",
+	Name:  "ps",
 	Usage: "list all the containers",
 	Action: func(context *cli.Context) error {
 		ListContainers()
+		return nil
+	},
+}
+
+var logCommand = cli.Command{
+	Name:  "logs",
+	Usage: "print logs of a container",
+	Action: func(context *cli.Context) error {
+		if len(context.Args()) < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		contianerName := context.Args()[0]
+		logContainer(contianerName)
 		return nil
 	},
 }

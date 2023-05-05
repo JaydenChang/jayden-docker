@@ -18,9 +18,12 @@ import (
 // dockerCommand/run.go
 // This is the function what `docker run` will call
 func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig, volume, containerName string) {
-
+	containerID := randStringBytes(10)
+	if containerName == "" {
+		containerName = containerID
+	}
 	// this is "docker init <containerCmd>"
-	initProcess, writePipe := container.NewParentProcess(tty, volume)
+	initProcess, writePipe := container.NewParentProcess(tty, volume, containerName)
 	if initProcess == nil {
 		logrus.Errorf("new parent process error")
 		return

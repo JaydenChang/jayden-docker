@@ -1,6 +1,7 @@
 package container
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -25,9 +26,10 @@ var (
 	Exit                string = "exited"
 	DefaultInfoLocation string = "/var/run/simple-docker/%s"
 	ConfigName          string = "config.json"
+	ContainerLogFile    string = "container.log"
 )
 
-func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string, containerName string) (*exec.Cmd, *os.File) {
 
 	readPipe, writePipe, err := os.Pipe()
 
@@ -51,6 +53,20 @@ func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+	} else {
+		// create container.log i
+		dirURL := fmt.Sprintf(DefaultInfoLocation, containerName)
+		if err := os.MkdirAll(dirURL, 0622); err != nil {
+			logrus.Errorf("new parent process mkdir %s error: %v", dirURL, err)
+		}
+		stdLogFilePath := dirURL + "/" + ContainerLogFile
+		stdLogFile, err := os.Create(stdLogFilePath)
+		if err != nil {
+			logrus.Errorf("new parent process create file %s error: %v", stdLogFilePath, err)
+			return nil, nil
+		}
+		// put stdLogFile as stdout
+		cmd.Stdout = stdLogFile
 	}
 
 	cmd.ExtraFiles = []*os.File{readPipe}
