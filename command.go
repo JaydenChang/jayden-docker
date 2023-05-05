@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"simple-docker/cgroup/subsystem"
 	"simple-docker/container"
 	"simple-docker/dockerCommand"
@@ -65,8 +66,22 @@ var runCommand = cli.Command{
 			CPUSet:      context.String("cpu"),
 		}
 		volume := context.String("v")
-		dockerCommand.Run(tty, containerCmd, &resourceConfig,volume)
+		dockerCommand.Run(tty, containerCmd, &resourceConfig, volume)
 
+		return nil
+	},
+}
+
+var commitCommand = cli.Command{
+	Name:  "commit",
+	Usage: "commit a container into image",
+	Action: func(context *cli.Context) error {
+		if len(context.Args()) < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		imageName := context.Args()[0]
+		// commitContainer(containerName)
+		commitContainer(imageName)
 		return nil
 	},
 }
