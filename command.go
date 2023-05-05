@@ -44,6 +44,15 @@ var runCommand = cli.Command{
 		}, &cli.StringFlag{
 			Name:  "v",
 			Usage: "volume",
+		}, &cli.BoolFlag{
+			Name: "d",
+			Usage :"detach container",
+		}, &cli.StringFlag{
+			Name: "cpuset",
+			Usage: "limit the cpuset",
+		}, &cli.StringFlag {
+			Name: "name",
+			Usage: "container name",
 		},
 	},
 	Action: func(context *cli.Context) error {
@@ -58,6 +67,11 @@ var runCommand = cli.Command{
 
 		// check whether type `-it`
 		tty := context.Bool("it") // presudo terminal
+		detach := context.Bool("d") // detach container
+
+		if tty && detach {
+			return fmt.Errorf("it and d paramter cannot both privided")
+		}
 
 		// get the resource config
 		resourceConfig := subsystem.ResourceConfig{
@@ -66,7 +80,8 @@ var runCommand = cli.Command{
 			CPUSet:      context.String("cpu"),
 		}
 		volume := context.String("v")
-		dockerCommand.Run(tty, containerCmd, &resourceConfig, volume)
+		containerName := context.String("name")
+		dockerCommand.Run(tty, containerCmd, &resourceConfig, volume, containerName)
 
 		return nil
 	},

@@ -10,6 +10,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type ContainerInfo struct {
+	Pid         string `json:"pid"`
+	Id          string `json:"id"`
+	Name        string `json:"name"`
+	Command     string `json:"command"` // the command that init process execute
+	CreatedTime string `json:"created_time"`
+	Status      string `json:"status"`
+}
+
+var (
+	RUNNING             string = "running"
+	STOP                string = "stopped"
+	Exit                string = "exited"
+	DefaultInfoLocation string = "/var/run/simple-docker/%s"
+	ConfigName          string = "config.json"
+)
+
 func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 
 	readPipe, writePipe, err := os.Pipe()
@@ -53,107 +70,4 @@ func readCommand() []string {
 		return nil
 	}
 	return strings.Split(string(msg), " ")
-}
-
-func DeleteMountPoint(rootURL string, mntURL string) {
-	cmd := exec.Command("umount", mntURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		logrus.Errorf("%v", err)
-	}
-	if err := os.RemoveAll(mntURL); err != nil {
-		logrus.Errorf("remove dir %s error %v", mntURL, err)
-	}
-}
-
-func DeleteWriteLayer(rootURL string) {
-	writeURL := rootURL + "/writeLayer/"
-	if err := os.RemoveAll(writeURL); err != nil {
-		logrus.Errorf("remove dir %s error %v", writeURL, err)
-	}
-}
-
-func DeleteWorkSpace(rootURL, mntURL, volume string) {
-	if volume != "" {
-		volumeURLs := volumeUrlExtract(volume)
-		length := len(volumeURLs)
-		if length == 2 && volumeURLs[0] != "" && volumeURLs[1] != "" {
-			DeleteMountPointWithVolume(rootURL, mntURL, volumeURLs)
-		} else {
-			DeleteMountPoint(rootURL, mntURL)
-		}
-	} else {
-		DeleteMountPoint(rootURL, mntURL)
-	}
-	DeleteWriteLayer(rootURL)
-}
-
-// extract tar to 'busybox', used as the read only layer for container
-func CreateReadOnlyLayer(rootURL string) {
-	busyboxURL := rootURL + "/busybox/"
-	busyboxTarURL := rootURL + "/busybox.tar"
-	exist, err := PathExists(busyboxURL)
-
-	if err != nil {
-		logrus.Infof("fail to judge whether dir %s exists. %v", busyboxURL, err)
-	}
-	if !exist {
-		if err := os.Mkdir(busyboxURL, 0777); err != nil {
-			logrus.Errorf("mkdir dir %s error. %v", busyboxURL, err)
-		}
-		if _, err := exec.Command("tar", "-xvf", busyboxTarURL, "-C", busyboxURL).CombinedOutput(); err != nil {
-			logrus.Errorf("unTar dir %s error %v", busyboxTarURL, err)
-		}
-	}
-}
-
-// create a unique folder as writeLayer
-func CreateWriteLayer(rootURL string) {
-	writeURL := rootURL + "/writeLayer/"
-	if err := os.Mkdir(writeURL, 0777); err != nil {
-		logrus.Errorf("mkdir dir %s error %v", writeURL, err)
-	}
-}
-
-func CreateMountPoint(rootURL string, mntURL string) {
-	// create mnt folder as mount point
-	if err := os.Mkdir(mntURL, 0777); err != nil {
-		logrus.Errorf("mkdir dir %s error %v", mntURL, err)
-	}
-	// mount 'writeLayer' and 'busybox' to 'mnt'
-	dirs := "dirs=" + rootURL + "/writeLayer:" + rootURL + "/busybox"
-	cmd := exec.Command("mount", "-t", "aufs", "-o", dirs, "none", mntURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		logrus.Errorf("%v", err)
-	}
-}
-
-func PathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
-}
-
-func NewWorkSpace(rootURL, mntURL, volume string) {
-	CreateReadOnlyLayer(rootURL)
-	CreateWriteLayer(rootURL)
-	CreateMountPoint(rootURL, mntURL)
-	if volume != "" {
-		volumeURLs := volumeUrlExtract(volume)
-		length := len(volumeURLs)
-		if length == 2 && volumeURLs[0] != "" && volumeURLs[1] != "" {
-			MountVolume(rootURL, mntURL, volumeURLs)
-			logrus.Infof("%q", volumeURLs)
-		} else {
-			logrus.Infof("volume parameter input is not correct")
-		}
-	}
 }
