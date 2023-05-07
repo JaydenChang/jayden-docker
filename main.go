@@ -1,6 +1,7 @@
 package main
 
 import (
+	"simple-docker/utils"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -14,11 +15,12 @@ func main() {
 	app.Name = "simple-docker"
 	app.Usage = usage
 	app.Commands = []cli.Command{
-		runCommand,
-		initCommand,
-		commitCommand,
-		listCommand,
-		logCommand,
+		utils.InitCommand,
+		utils.RunCommand,
+		utils.LogCommand,
+		utils.ListCommand,
+		utils.ExecCommand,
+		utils.CommitCommand,
 	}
 	app.Before = func(context *cli.Context) error {
 		logrus.SetFormatter(&logrus.JSONFormatter{})
