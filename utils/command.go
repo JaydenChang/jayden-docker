@@ -138,7 +138,7 @@ var ExecCommand = cli.Command{
 		}
 		containerName := context.Args()[0]
 		containerCmd := make([]string, len(context.Args())-1)
-		for i,v := range context.Args().Tail() {
+		for i, v := range context.Args().Tail() {
 			containerCmd[i] = v
 		}
 		fmt.Println(context.Args(), containerCmd)
@@ -148,7 +148,7 @@ var ExecCommand = cli.Command{
 }
 
 var StopCommand = cli.Command{
-	Name: "stop",
+	Name:  "stop",
 	Usage: "stop a container",
 	Action: func(context *cli.Context) error {
 		if len(context.Args()) < 1 {
@@ -156,6 +156,19 @@ var StopCommand = cli.Command{
 		}
 		containerName := context.Args()[0]
 		stopContainer(containerName)
+		return nil
+	},
+}
+
+var RemoveCommand = cli.Command{
+	Name:  "rm",
+	Usage: "remove a container",
+	Action: func(context *cli.Context) error {
+		if len(context.Args()) < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		containerName := context.Args()[0]
+		removeContainer(containerName)
 		return nil
 	},
 }
