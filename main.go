@@ -1,8 +1,8 @@
 package main
 
 import (
-	"simple-docker/utils"
 	"os"
+	"simple-docker/utils"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -17,9 +17,9 @@ func main() {
 	app.Commands = []cli.Command{
 		utils.InitCommand,
 		utils.RunCommand,
+		utils.ExecCommand,
 		utils.LogCommand,
 		utils.ListCommand,
-		utils.ExecCommand,
 		utils.CommitCommand,
 		utils.StopCommand,
 		utils.RemoveCommand,

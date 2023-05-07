@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"simple-docker/container"
+	_ "simple-docker/nsenter"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -18,7 +19,7 @@ const ENV_EXEC_CMD = "simple_docker_cmd"
 func getContainerPidByName(containerName string) (string, error) {
 	// get the path that store container info
 	dirURL := fmt.Sprintf(container.DefaultInfoLocation, containerName)
-	configFilePath := dirURL + "/" + container.ConfigName
+	configFilePath := dirURL + container.ConfigName
 	// read files in target path
 	contentBytes, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
@@ -52,11 +53,11 @@ func ExecContainer(containerName string, comArray []string) {
 	err = os.Setenv(ENV_EXEC_PID, pid)
 	if err != nil {
 		logrus.Errorf("set env exec pid %s error %v", pid, err)
-	} 
+	}
 	err = os.Setenv(ENV_EXEC_CMD, cmdStr)
 	if err != nil {
 		logrus.Errorf("set env exec command %s error %v", cmdStr, err)
-	}	
+	}
 
 	if err := cmd.Run(); err != nil {
 		logrus.Errorf("exec container %s error %v", containerName, err)

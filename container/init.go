@@ -3,73 +3,32 @@ package container
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
 )
 
-// container/init.go
-func NewProcess(tty bool, containerCmd string) *exec.Cmd {
-
-	// create a new command which run itself
-	// the first arguments is `init` which is the below exported function
-	// so, the <cmd> will be interpret as "docker init <containerCmd>"
-	args := []string{"init", containerCmd}
-	cmd := exec.Command("/proc/self/exe", args...)
-
-	// new namespaces, thanks to Linux
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWIPC | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET,
+func setUpMount() {
+	pwd, err := os.Getwd()
+	if err != nil {
+		logrus.Errorf("Get current location error %v", err)
+		return
 	}
 
-	// this is what presudo terminal means
-	// link the container's stdio to os
-	if tty {
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
+	logrus.Infof("Current location is %s", pwd)
 
-	return cmd
-}
-
-// already in container
-// initiate the container
-func InitProcess() error {
-	// read command from pipe, will plug if write side is not ready
-	containerCmd := readCommand()
-	if len(containerCmd) == 0 {
-		return errors.New("init process failed, containerCmd is nil")
-	}
-
-	if err := setUpMount(); err != nil {
-		logrus.Errorf("initProcess look path failed: %v", err)
-	}
+	syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, "")
+	pivotRoot(pwd)
 
 	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-
-	// mount proc filesystem
 	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
 
-	// look for the path of container command
-	// so we don't need to type "/bin/ls", but "ls"
-	path, err := exec.LookPath(containerCmd[0])
-	if err != nil {
-		logrus.Errorf("initProcess look path failed: %v", err)
-		return err
-	}
-
-	// log path info
-	// if you type "ls", it will be "/bin/ls"
-	logrus.Infof("Find path: %v", path)
-	if err := syscall.Exec(path, containerCmd, os.Environ()); err != nil {
-		logrus.Errorf(err.Error())
-	}
-
-	return nil
+	syscall.Mount("tmpfs", "/dev", "tmpfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
 }
 
 func pivotRoot(root string) error {
@@ -104,26 +63,41 @@ func pivotRoot(root string) error {
 	return os.Remove(pivotDir)
 }
 
-func setUpMount() error {
-	// get current path
-	pwd, err := os.Getwd()
+func readCommand() []string {
+	// 3 is the index of readPipe
+	pipe := os.NewFile(uintptr(3), "pipe")
+	msg, err := ioutil.ReadAll(pipe)
 	if err != nil {
-		logrus.Errorf("get current location error: %v", err)
-		return err
+		logrus.Errorf("read pipe failed: %v", err)
+		return nil
 	}
-	logrus.Infof("current location: %v", pwd)
-	pivotRoot(pwd)
+	return strings.Split(string(msg), " ")
+}
 
-	// mount proc
-	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	if err := syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), ""); err != nil {
-		logrus.Errorf("mount /proc failed: %v", err)
+// already in container
+// initiate the container
+func InitProcess() error {
+	// read command from pipe, will plug if write side is not ready
+	containerCmd := readCommand()
+	if len(containerCmd) == 0 {
+		return errors.New("init process failed, containerCmd is nil")
+	}
+
+	setUpMount()
+	// look for the path of container command
+	// so we don't need to type "/bin/ls", but "ls"
+	path, err := exec.LookPath(containerCmd[0])
+	if err != nil {
+		logrus.Errorf("initProcess look path failed: %v", err)
 		return err
 	}
 
-	if err := syscall.Mount("tmpfs", "/dev", "tmpfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755"); err != nil {
-		logrus.Errorf("mount /dev failed: %v", err)
-		return err
+	// log path info
+	// if you type "ls", it will be "/bin/ls"
+	logrus.Infof("Find path: %v", path)
+	if err := syscall.Exec(path, containerCmd, os.Environ()); err != nil {
+		logrus.Errorf(err.Error())
 	}
+
 	return nil
 }

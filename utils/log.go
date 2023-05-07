@@ -12,7 +12,7 @@ import (
 func logContainer(containerName string) {
 	// get the log path
 	dirURL := fmt.Sprintf(container.DefaultInfoLocation, containerName)
-	logFileLocation := dirURL + "/" + container.ContainerLogFile
+	logFileLocation := dirURL + container.ContainerLogFile
 	// open log file
 	file, err := os.Open(logFileLocation)
 	if err != nil {

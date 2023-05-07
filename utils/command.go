@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"simple-docker/cgroup/subsystem"
+	"simple-docker/cgroups/subsystem"
 	"simple-docker/container"
-	"simple-docker/dockerCommand"
-	_ "simple-docker/nsenter"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -24,7 +22,6 @@ var InitCommand = cli.Command{
 	},
 }
 
-// docker run
 var RunCommand = cli.Command{
 	Name:  "run",
 	Usage: "Create a container",
@@ -83,8 +80,30 @@ var RunCommand = cli.Command{
 		}
 		volume := context.String("v")
 		containerName := context.String("name")
-		dockerCommand.Run(tty, containerCmd, &resourceConfig, volume, containerName)
+		Run(tty, containerCmd, &resourceConfig, volume, containerName)
 
+		return nil
+	},
+}
+
+var ExecCommand = cli.Command{
+	Name:  "exec",
+	Usage: "exec a command into container",
+	Action: func(context *cli.Context) error {
+		if os.Getenv(ENV_EXEC_PID) != "" {
+			logrus.Infof("pid callback pid %v", os.Getgid())
+			return nil
+		}
+		if len(context.Args()) < 2 {
+			return fmt.Errorf("missing container name or command")
+		}
+		containerName := context.Args()[0]
+		containerCmd := make([]string, len(context.Args())-1)
+		for i, v := range context.Args().Tail() {
+			containerCmd[i] = v
+		}
+		fmt.Println(context.Args(), containerCmd)
+		ExecContainer(containerName, containerCmd)
 		return nil
 	},
 }
@@ -121,28 +140,6 @@ var LogCommand = cli.Command{
 		}
 		contianerName := context.Args()[0]
 		logContainer(contianerName)
-		return nil
-	},
-}
-
-var ExecCommand = cli.Command{
-	Name:  "exec",
-	Usage: "exec a command into container",
-	Action: func(context *cli.Context) error {
-		if os.Getenv(ENV_EXEC_PID) != "" {
-			logrus.Infof("pid callback pid %v", os.Getgid())
-			return nil
-		}
-		if len(context.Args()) < 2 {
-			return fmt.Errorf("missing container name or command")
-		}
-		containerName := context.Args()[0]
-		containerCmd := make([]string, len(context.Args())-1)
-		for i, v := range context.Args().Tail() {
-			containerCmd[i] = v
-		}
-		fmt.Println(context.Args(), containerCmd)
-		ExecContainer(containerName, containerCmd)
 		return nil
 	},
 }

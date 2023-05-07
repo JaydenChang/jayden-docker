@@ -45,7 +45,7 @@ func stopContainer(containerName string) {
 		return
 	}
 	dirURL := fmt.Sprintf(container.DefaultInfoLocation, containerName)
-	configFilePath := dirURL + "/" + container.ConfigName
+	configFilePath := dirURL + container.ConfigName
 	// overwrite containerInfo
 	if err := ioutil.WriteFile(configFilePath, nweContentBytes, 0622); err != nil {
 		logrus.Errorf("write config file %s error %v", configFilePath, err)
@@ -54,7 +54,7 @@ func stopContainer(containerName string) {
 
 func getContainerInfoByName(containerName string) (*container.ContainerInfo, error) {
 	dirURL := fmt.Sprintf(container.DefaultInfoLocation, containerName)
-	configFilePath := dirURL + "/" + container.ConfigName
+	configFilePath := dirURL + container.ConfigName
 	contentBytes, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		logrus.Errorf("read config file %s error %v", configFilePath, err)
