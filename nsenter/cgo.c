@@ -46,16 +46,16 @@ __attribute__((constructor)) void enter_namespace(void)
         // create the target path, like /proc/pid/ns/ipc
         sprintf(nspath, "/proc/%s/ns/%s", simple_docker_pid, namespace[i]);
         int fd = open(nspath, O_RDONLY);
-        printf("==== %d %s\n", fd, nspath);
         // call sentns and enter the target namespace
         if (setns(fd, 0) == -1)
         {
+            printf("==== %d %s\n", fd, nspath);
             fprintf(stderr, "setns on %s namespace failed: %s\n", namespace[i], strerror(errno));
         }
-        else
-        {
-            fprintf(stdout, "setns on %s namespace succeeded\n", namespace[i]);
-        }
+        // else
+        // {
+        //     fprintf(stdout, "setns on %s namespace succeeded\n", namespace[i]);
+        // }
         close(fd);
     }
     // run command in target namespace

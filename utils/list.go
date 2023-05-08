@@ -24,7 +24,6 @@ func ListContainers() {
 	var containers []*container.ContainerInfo
 	for _, file := range files {
 		tmpContainer, err := getContainerInfo(file)
-		// .Println(tmpContainer)
 		if err != nil {
 			logrus.Errorf("get container info error %v", err)
 			continue
