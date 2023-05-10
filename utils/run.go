@@ -32,7 +32,7 @@ func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, con
 		logrus.Error(err)
 	}
 	// container info
-	containerName, err := recordContainerInfo(initProcess.Process.Pid, cmdArray, containerName, imageName)
+	containerName, err := recordContainerInfo(initProcess.Process.Pid, cmdArray, containerName, volume)
 	if err != nil {
 		logrus.Errorf("record container info error: %v", err)
 		return
