@@ -19,6 +19,9 @@ var (
 	DefaultInfoLocation string = "/var/run/simple-docker/%s/"
 	ConfigName          string = "config.json"
 	ContainerLogFile    string = "container.log"
+	RootURL             string = "/root/"
+	MntURL              string = "/root/mnt/%s/"
+	WriteLayerURL       string = "/root/writeLayer/%s"
 )
 
 type ContainerInfo struct {
@@ -28,6 +31,7 @@ type ContainerInfo struct {
 	Command     string `json:"command"`    //容器内init运行命令
 	CreatedTime string `json:"createTime"` //创建时间
 	Status      string `json:"status"`     //容器的状态
+	Volume      string `json:"volume"`
 }
 
 func volumeUrlExtract(volume string) []string {
@@ -46,15 +50,15 @@ func PathExists(path string) (bool, error) {
 	return false, err
 }
 
-func NewWorkSpace(rootURL, mntURL, volume string) {
-	CreateReadOnlyLayer(rootURL)
-	CreateWriteLayer(rootURL)
-	CreateMountPoint(rootURL, mntURL)
+func NewWorkSpace(volume, imageName, containerName string) {
+	CreateReadOnlyLayer(imageName)
+	CreateWriteLayer(containerName)
+	CreateMountPoint(containerName, imageName)
 	if volume != "" {
 		volumeURLs := volumeUrlExtract(volume)
 		length := len(volumeURLs)
 		if length == 2 && volumeURLs[0] != "" && volumeURLs[1] != "" {
-			MountVolume(rootURL, mntURL, volumeURLs)
+			MountVolume(volumeURLs, containerName)
 			logrus.Infof("%q", volumeURLs)
 		} else {
 			logrus.Infof("volume parameter input is not correct")
@@ -62,47 +66,55 @@ func NewWorkSpace(rootURL, mntURL, volume string) {
 	}
 }
 
-func CreateReadOnlyLayer(rootURL string) {
-	busyboxURL := rootURL + "/busybox/"
-	busyboxTarURL := rootURL + "/busybox.tar"
-	exist, err := PathExists(busyboxURL)
+func CreateReadOnlyLayer(imageName string) error {
+	unTarFolderURL := RootURL + "/" + imageName + "/"
+	imageURL := RootURL + "/" + imageName + ".tar"
+	exist, err := PathExists(unTarFolderURL)
 
 	if err != nil {
-		logrus.Infof("fail to judge whether dir %s exists. %v", busyboxURL, err)
+		logrus.Infof("fail to judge whether dir %s exists. %v", unTarFolderURL, err)
+		return err
 	}
 	if !exist {
-		if err := os.Mkdir(busyboxURL, 0777); err != nil {
-			logrus.Errorf("mkdir dir %s error. %v", busyboxURL, err)
+		if err := os.MkdirAll(unTarFolderURL, 0777); err != nil {
+			logrus.Errorf("mkdir dir %s error. %v", unTarFolderURL, err)
+			return err
 		}
-		if _, err := exec.Command("tar", "-xvf", busyboxTarURL, "-C", busyboxURL).CombinedOutput(); err != nil {
-			logrus.Errorf("unTar dir %s error %v", busyboxTarURL, err)
+		if _, err := exec.Command("tar", "-xvf", imageURL, "-C", unTarFolderURL).CombinedOutput(); err != nil {
+			logrus.Errorf("unTar dir %s error %v", unTarFolderURL, err)
+			return err
 		}
+	}
+	return nil
+}
+
+func CreateWriteLayer(containerName string) {
+	writeUrl := fmt.Sprintf(WriteLayerURL, containerName)
+	if err := os.MkdirAll(writeUrl, 0777); err != nil {
+		logrus.Infof("Mkdir write layer dir %s error. %v", writeUrl, err)
 	}
 }
 
-func CreateWriteLayer(rootURL string) {
-	writeUrl := rootURL + "/writeLayer/"
-	if err := os.Mkdir(writeUrl, 0777); err != nil {
-		logrus.Errorf("Mkdir dir %s error. %v", writeUrl, err)
-	}
-}
-
-func CreateMountPoint(rootURL string, mntURL string) {
+func CreateMountPoint(containerName, imageName string) error {
 	// create mnt folder as mount point
-	if err := os.Mkdir(mntURL, 0777); err != nil {
+	mntURL := fmt.Sprintf(MntURL, containerName)
+	if err := os.MkdirAll(mntURL, 0777); err != nil {
 		logrus.Errorf("mkdir dir %s error %v", mntURL, err)
+		return err
 	}
 	// mount 'writeLayer' and 'busybox' to 'mnt'
-	dirs := "dirs=" + rootURL + "writeLayer:" + rootURL + "busybox"
-	cmd := exec.Command("mount", "-t", "aufs", "-o", dirs, "none", mntURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		logrus.Errorf("%v", err)
+	tmpWriteLayer := fmt.Sprintf(WriteLayerURL, containerName)
+	tmpImageLocation := RootURL + "/" + imageName
+	dirs := "dirs=" + tmpWriteLayer + ":" + tmpImageLocation
+	_, err := exec.Command("mount", "-t", "aufs", "-o", dirs, "none", mntURL).CombinedOutput()
+	if err != nil {
+		logrus.Errorf("run command for creating mount point failed: %v", err)
+		return err
 	}
+	return nil
 }
 
-func MountVolume(rootURL, mntURL string, volumeURLs []string) {
+func MountVolume(volumeURLs []string, containerName string) error {
 	// create host file catalog
 	parentURL := volumeURLs[0]
 	if err := os.Mkdir(parentURL, 0777); err != nil {
@@ -110,73 +122,75 @@ func MountVolume(rootURL, mntURL string, volumeURLs []string) {
 	}
 	// create mount point in container file system
 	containerURL := volumeURLs[1]
-	containerVolumeURL := mntURL + containerURL
+	mntURL := fmt.Sprintf(MntURL, containerName)
+	containerVolumeURL := mntURL + "/" + containerURL
 	if err := os.Mkdir(containerVolumeURL, 0777); err != nil {
 		logrus.Infof("mkdir container dir %s error. %v", containerVolumeURL, err)
 	}
 	// mount host file catalog to mount point in container
 	dirs := "dirs=" + parentURL
-	cmd := exec.Command("mount", "-t", "aufs", "-o", dirs, "none", containerVolumeURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	_, err := exec.Command("mount", "-t", "aufs", "-o", dirs, "none", containerVolumeURL).CombinedOutput()
+	if err != nil {
 		logrus.Errorf("mount volume failed. %v", err)
+		return err
 	}
+	return nil
 }
 
-func DeleteMountPointWithVolume(rootURL, mntURL string, volumeURLs []string) {
+func DeleteMountPointWithVolume(volumeURLs []string, containerName string) error {
 	// umount volume point in container
-	containerURL := mntURL + volumeURLs[1]
-	cmd := exec.Command("umount", containerURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	mntURL := fmt.Sprintf(MntURL, containerName)
+	containerURL := mntURL + "/" + volumeURLs[1]
+	if _, err := exec.Command("umount", containerURL).CombinedOutput(); err != nil {
 		logrus.Errorf("umount volume failed. %v", err)
+		return err
 	}
 	// umount the whole point of the container
-	cmd = exec.Command("umount", mntURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	_, err := exec.Command("umount", mntURL).CombinedOutput()
+	if err != nil {
 		logrus.Errorf("umount mountpoint failed. %v", err)
+		return err
 	}
 	if err := os.RemoveAll(mntURL); err != nil {
 		logrus.Infof("remove mountpoint dir %s error %v", mntURL, err)
 	}
+	return nil
 }
 
-func DeleteMountPoint(rootURL string, mntURL string) {
-	cmd := exec.Command("umount", mntURL)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+func DeleteMountPoint(containerName string) error {
+	mntURL := fmt.Sprintf(MntURL, containerName)
+	_, err := exec.Command("umount", mntURL).CombinedOutput()
+	if err != nil {
 		logrus.Errorf("%v", err)
+		return err
 	}
 	if err := os.RemoveAll(mntURL); err != nil {
 		logrus.Errorf("remove dir %s error %v", mntURL, err)
+		return err
 	}
+	return nil
 }
 
-func DeleteWriteLayer(rootURL string) {
-	writeURL := rootURL + "/writeLayer/"
+func DeleteWriteLayer(containerName string) {
+	writeURL := fmt.Sprintf(WriteLayerURL, containerName)
 	if err := os.RemoveAll(writeURL); err != nil {
 		logrus.Errorf("remove dir %s error %v", writeURL, err)
 	}
 }
 
-func DeleteWorkSpace(rootURL, mntURL, volume string) {
+func DeleteWorkSpace(volume, containerName string) {
 	if volume != "" {
 		volumeURLs := volumeUrlExtract(volume)
 		length := len(volumeURLs)
 		if length == 2 && volumeURLs[0] != "" && volumeURLs[1] != "" {
-			DeleteMountPointWithVolume(rootURL, mntURL, volumeURLs)
+			DeleteMountPointWithVolume(volumeURLs, containerName)
 		} else {
-			DeleteMountPoint(rootURL, mntURL)
+			DeleteMountPoint(containerName)
 		}
 	} else {
-		DeleteMountPoint(rootURL, mntURL)
+		DeleteMountPoint(containerName)
 	}
-	DeleteWriteLayer(rootURL)
+	DeleteWriteLayer(containerName)
 }
 
 func randStringBytes(n int) string {
@@ -189,7 +203,7 @@ func randStringBytes(n int) string {
 	return string(b)
 }
 
-func NewParentProcess(tty bool, volume string, containerName string) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string, containerName, imageName string) (*exec.Cmd, *os.File) {
 	readPipe, writePipe, err := os.Pipe()
 
 	if err != nil {
@@ -198,15 +212,15 @@ func NewParentProcess(tty bool, volume string, containerName string) (*exec.Cmd,
 	}
 	// create a new command which run itself
 	// the first arguments is `init` which is in the "container/init.go" file
-	// so, the <cmd> will be interpret as "docker init <containerCmd>"
+	// so, the <cmd> will be interpret as "docker init <cmdArray>"
 	cmd := exec.Command("/proc/self/exe", "init")
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS |
 			syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC,
 	}
+	cmd.Stdin = os.Stdin
 	if tty {
-		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	} else {
@@ -224,11 +238,8 @@ func NewParentProcess(tty bool, volume string, containerName string) (*exec.Cmd,
 		cmd.Stdout = stdLogFile
 	}
 	cmd.ExtraFiles = []*os.File{readPipe}
-	mntURL := "/root/mnt"
-	rootURL := "/root/"
-	NewWorkSpace(rootURL, mntURL, volume)
-	cmd.Dir = mntURL
+	NewWorkSpace(volume, imageName, containerName)
+	cmd.Dir = fmt.Sprintf(MntURL, containerName)
 
-	// cmd.Dir = "/root/busybox"
 	return cmd, writePipe
 }

@@ -20,7 +20,6 @@ func (ms *Memory) Set(cgroupPath string, res *ResourceConfig) error {
 	if subsystemCgroupPath, err := GetCgroupPath(ms.Name(), cgroupPath, true); err != nil {
 		return err
 	} else {
-		fmt.Println("------", subsystemCgroupPath)
 		if err := ioutil.WriteFile(path.Join(subsystemCgroupPath, "memory.limit_in_bytes"), []byte(res.MemoryLimit), 0644); err != nil {
 			return fmt.Errorf("set cgroup memory fail: %v", err)
 		}

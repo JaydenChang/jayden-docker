@@ -78,15 +78,15 @@ func readCommand() []string {
 // initiate the container
 func InitProcess() error {
 	// read command from pipe, will plug if write side is not ready
-	containerCmd := readCommand()
-	if len(containerCmd) == 0 {
-		return errors.New("init process failed, containerCmd is nil")
+	cmdArray := readCommand()
+	if len(cmdArray) == 0 {
+		return errors.New("init process failed, cmdArray is nil")
 	}
 
 	setUpMount()
 	// look for the path of container command
 	// so we don't need to type "/bin/ls", but "ls"
-	path, err := exec.LookPath(containerCmd[0])
+	path, err := exec.LookPath(cmdArray[0])
 	if err != nil {
 		logrus.Errorf("initProcess look path failed: %v", err)
 		return err
@@ -95,7 +95,7 @@ func InitProcess() error {
 	// log path info
 	// if you type "ls", it will be "/bin/ls"
 	logrus.Infof("Find path: %v", path)
-	if err := syscall.Exec(path, containerCmd, os.Environ()); err != nil {
+	if err := syscall.Exec(path, cmdArray, os.Environ()); err != nil {
 		logrus.Errorf(err.Error())
 	}
 

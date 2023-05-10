@@ -61,8 +61,8 @@ var RunCommand = cli.Command{
 		}
 
 		// 转化 cli.Args 为 []string
-		containerCmd := make([]string, len(args)) // command
-		copy(containerCmd, args)
+		cmdArray := make([]string, len(args)) // command
+		copy(cmdArray, args)
 
 		// check whether type `-it`
 		tty := context.Bool("it")   // presudo terminal
@@ -80,7 +80,9 @@ var RunCommand = cli.Command{
 		}
 		volume := context.String("v")
 		containerName := context.String("name")
-		Run(tty, containerCmd, &resourceConfig, volume, containerName)
+		imageName := cmdArray[0]
+		cmdArray = cmdArray[1:]
+		Run(tty, cmdArray, &resourceConfig, volume, containerName, imageName)
 
 		return nil
 	},
@@ -98,12 +100,12 @@ var ExecCommand = cli.Command{
 			return fmt.Errorf("missing container name or command")
 		}
 		containerName := context.Args()[0]
-		containerCmd := make([]string, len(context.Args())-1)
+		cmdArray := make([]string, len(context.Args())-1)
 		for i, v := range context.Args().Tail() {
-			containerCmd[i] = v
+			cmdArray[i] = v
 		}
-		fmt.Println(context.Args(), containerCmd)
-		ExecContainer(containerName, containerCmd)
+		fmt.Println(context.Args(), cmdArray)
+		ExecContainer(containerName, cmdArray)
 		return nil
 	},
 }
@@ -115,9 +117,10 @@ var CommitCommand = cli.Command{
 		if len(context.Args()) < 1 {
 			return fmt.Errorf("missing container name")
 		}
-		imageName := context.Args()[0]
+		containerName := context.Args()[0]
+		imageName := context.Args()[1]
 		// commitContainer(containerName)
-		commitContainer(imageName)
+		commitContainer(containerName, imageName)
 		return nil
 	},
 }

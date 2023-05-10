@@ -15,13 +15,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig, volume, containerName string) {
+func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, containerName, imageName string) {
 	containerID := randStringBytes(10)
 	if containerName == "" {
 		containerName = containerID
 	}
-	// this is "docker init <containerCmd>"
-	initProcess, writePipe := container.NewParentProcess(tty, volume, containerName)
+	// this is "docker init <cmdArray>"
+	initProcess, writePipe := container.NewParentProcess(tty, volume, containerName, imageName)
 	if initProcess == nil {
 		logrus.Errorf("new parent process error")
 		return
@@ -32,7 +32,7 @@ func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig, volume,
 		logrus.Error(err)
 	}
 	// container info
-	containerName, err := recordContainerInfo(initProcess.Process.Pid, containerCmd, containerName)
+	containerName, err := recordContainerInfo(initProcess.Process.Pid, cmdArray, containerName, imageName)
 	if err != nil {
 		logrus.Errorf("record container info error: %v", err)
 		return
@@ -46,14 +46,12 @@ func Run(tty bool, containerCmd []string, res *subsystem.ResourceConfig, volume,
 
 	// send command to write side
 	// will close the plug
-	sendInitCommand(containerCmd, writePipe)
+	sendInitCommand(cmdArray, writePipe)
 
 	if tty {
 		initProcess.Wait()
 		deleteContainerInfo(containerName)
-		rootURL := "/root/"
-		mntURL := "/root/mnt/"
-		container.DeleteWorkSpace(rootURL, mntURL, volume)
+		container.DeleteWorkSpace(volume, containerName)
 	}
 	os.Exit(0)
 }
@@ -75,7 +73,7 @@ func deleteContainerInfo(containerID string) {
 	}
 }
 
-func recordContainerInfo(containerPID int, commandArray []string, containerName string) (string, error) {
+func recordContainerInfo(containerPID int, commandArray []string, containerName, volume string) (string, error) {
 	// create an ID that length is 10
 	id := randStringBytes(10)
 	createTime := time.Now().Format("2006-01-02 15:04:05")
@@ -91,6 +89,7 @@ func recordContainerInfo(containerPID int, commandArray []string, containerName 
 		CreatedTime: createTime,
 		Status:      container.RUNNING,
 		Name:        containerName,
+		Volume:      volume,
 	}
 	// trun containerInfo info string
 	jsonBytes, err := json.Marshal(containerInfo)
@@ -122,8 +121,8 @@ func recordContainerInfo(containerPID int, commandArray []string, containerName 
 	return containerName, nil
 }
 
-func sendInitCommand(containerCmd []string, writePipe *os.File) {
-	cmdString := strings.Join(containerCmd, " ")
+func sendInitCommand(cmdArray []string, writePipe *os.File) {
+	cmdString := strings.Join(cmdArray, " ")
 	logrus.Infof("whole init command is: %v", cmdString)
 	writePipe.WriteString(cmdString)
 	writePipe.Close()
