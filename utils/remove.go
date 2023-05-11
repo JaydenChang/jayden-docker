@@ -20,10 +20,11 @@ func removeContainer(containerName string) {
 		return
 	}
 	dirURL := fmt.Sprintf(container.DefaultInfoLocation, containerName)
-	fmt.Println("################",dirURL)
+	fmt.Println("################", dirURL)
 	// remove all the info including sub dir
 	if err := os.RemoveAll(dirURL); err != nil {
 		logrus.Errorf("cannot remove dir %s error: %v", dirURL, err)
 		return
 	}
+	container.DeleteWorkSpace(containerInfo.Volume, containerName)
 }
