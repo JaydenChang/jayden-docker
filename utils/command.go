@@ -52,6 +52,9 @@ var RunCommand = cli.Command{
 		}, &cli.StringFlag{
 			Name:  "name",
 			Usage: "container name",
+		}, &cli.StringSliceFlag{
+			Name:  "e",
+			Usage: "set environment",
 		},
 	},
 	Action: func(context *cli.Context) error {
@@ -80,9 +83,10 @@ var RunCommand = cli.Command{
 		}
 		volume := context.String("v")
 		containerName := context.String("name")
+		envSlice := context.StringSlice("e")
 		imageName := cmdArray[0]
 		cmdArray = cmdArray[1:]
-		Run(tty, cmdArray, &resourceConfig, volume, containerName, imageName)
+		Run(tty, cmdArray, &resourceConfig, volume, containerName, imageName,envSlice)
 
 		return nil
 	},

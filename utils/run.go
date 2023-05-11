@@ -15,13 +15,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, containerName, imageName string) {
+func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, containerName, imageName string, envSlice []string) {
 	containerID := randStringBytes(10)
 	if containerName == "" {
 		containerName = containerID
 	}
 	// this is "docker init <cmdArray>"
-	initProcess, writePipe := container.NewParentProcess(tty, volume, containerName, imageName)
+	initProcess, writePipe := container.NewParentProcess(tty, volume, containerName, imageName, envSlice)
 	if initProcess == nil {
 		logrus.Errorf("new parent process error")
 		return

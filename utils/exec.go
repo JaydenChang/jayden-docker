@@ -58,8 +58,24 @@ func ExecContainer(containerName string, comArray []string) {
 	if err != nil {
 		logrus.Errorf("set env exec command %s error %v", cmdStr, err)
 	}
+	// get target pid environ (container environ)
+	containerEnvs := getEnvsByPid(pid)
+	// set host environ and container environ to exec process
+	cmd.Env = append(os.Environ(), containerEnvs...)
 
 	if err := cmd.Run(); err != nil {
 		logrus.Errorf("exec container %s error %v", containerName, err)
 	}
+}
+
+func getEnvsByPid(pid string) []string {
+	path := fmt.Sprintf("/proc/%s/environ", pid)
+	contentBytes ,err := ioutil.ReadFile(path)
+	if err != nil {
+		logrus.Errorf("read file %s error %v", path, err)
+		return nil
+	}
+	// divide by '\u0000'
+	envs := strings.Split(string(contentBytes),"\u0000")
+	return envs
 }

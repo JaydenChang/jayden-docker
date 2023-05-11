@@ -2,12 +2,10 @@ package container
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -193,17 +191,7 @@ func DeleteWorkSpace(volume, containerName string) {
 	DeleteWriteLayer(containerName)
 }
 
-func randStringBytes(n int) string {
-	letterBytes := "1234567890"
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
-}
-
-func NewParentProcess(tty bool, volume string, containerName, imageName string) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string, containerName, imageName string, envSlice []string) (*exec.Cmd, *os.File) {
 	readPipe, writePipe, err := os.Pipe()
 
 	if err != nil {
@@ -238,6 +226,7 @@ func NewParentProcess(tty bool, volume string, containerName, imageName string) 
 		cmd.Stdout = stdLogFile
 	}
 	cmd.ExtraFiles = []*os.File{readPipe}
+	cmd.Env = append(os.Environ(), envSlice...)
 	NewWorkSpace(volume, imageName, containerName)
 	cmd.Dir = fmt.Sprintf(MntURL, containerName)
 
