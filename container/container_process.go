@@ -30,6 +30,7 @@ type ContainerInfo struct {
 	CreatedTime string `json:"createTime"` //创建时间
 	Status      string `json:"status"`     //容器的状态
 	Volume      string `json:"volume"`
+	PortMapping []string `json:"portmapping"` 
 }
 
 func volumeUrlExtract(volume string) []string {

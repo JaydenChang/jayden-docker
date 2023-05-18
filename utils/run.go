@@ -8,6 +8,7 @@ import (
 	"simple-docker/cgroups"
 	"simple-docker/cgroups/subsystem"
 	"simple-docker/container"
+	"simple-docker/network"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, containerName, imageName string, envSlice []string) {
+func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, containerName, imageName string, envSlice []string, nw string, portmapping []string) {
 	containerID := randStringBytes(10)
 	if containerName == "" {
 		containerName = containerID
@@ -43,6 +44,20 @@ func Run(tty bool, cmdArray []string, res *subsystem.ResourceConfig, volume, con
 	defer cm.Remove()
 	cm.Set(res)
 	cm.AddProcess(initProcess.Process.Pid)
+
+	if nw != "" {
+		network.Init()
+		containerInfo := &container.ContainerInfo{
+			Id:          containerID,
+			Pid:         strconv.Itoa(initProcess.Process.Pid),
+			Name:        containerName,
+			PortMapping: portmapping,
+		}
+		if err := network.Connect(nw, containerInfo); err != nil {
+			logrus.Errorf("error connect network: %v", err)
+			return		
+		}
+	}
 
 	// send command to write side
 	// will close the plug
